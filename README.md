@@ -1,2 +1,4 @@
 webrtc-sample-textchat
 ======================
+
+WebRTCのテキストチャットサンプル
