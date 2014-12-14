@@ -1,0 +1,116 @@
+<html>
+<head>
+<meta charset="utf-8"/>
+</head>
+<body>
+<form>
+  <textarea id="chatText"></textarea>
+  <input id="submitChat" type="button" value="送信" disabled/>
+  <input id="connectChat" type="button" value="接続"/>
+</form>
+<ul id="log"></ul>
+<script src="/socket.io/socket.io.js"></script>
+<script>
+
+window.RTCPeerConnection = window.webkitPeerConnection00 || window.webkitRTCPeerConnection || window.mozRTCPeerConnection;
+window.RTCSessionDescription = window.mozRTCSessionDescription || window.RTCSessionDescription;
+window.RTCIceCandidate = window.mozRTCIceCandidate || window.RTCIceCandidate;
+
+(function(){
+  // シグナリングサーバへ接続
+  var socket = io.connect();
+
+  // WebRTC関連
+  var ice_servers = {'iceServers':[{'url': 'stun:stun.l.google.com:19302'}]},
+      options = {optional: [{RtpDataChannels: true}]};
+  var peerConnection = new RTCPeerConnection(ice_servers, options);
+  var sendChannel = peerConnection.createDataChannel('sendDataChannel', {reliable: false});
+
+  // ボタン
+  var submitButton = document.getElementById('submitChat'),
+      connectButton = document.getElementById('connectChat'),
+      chatText = document.getElementById('chatText');
+
+
+  /*
+   * client A <-> client B 接続までの流れ
+   */
+
+  // 1.シグナリングサーバへOffer送信 (client A)
+  connectButton.onclick = function(){
+    peerConnection.createOffer(function(local_desc){
+      peerConnection.setLocalDescription(local_desc, function(){
+        socket.emit('peer:signaling:offer', local_desc);
+      }, onError);
+    });
+  };
+
+  // 2.シグナリングサーバからclient AのOffer受信 (client B)
+  socket.on('peer:signaling:offer', function(remote_desc){
+    peerConnection.setRemoteDescription(new RTCSessionDescription(remote_desc), function(){
+      peerConnection.createAnswer(function(local_desc){
+        peerConnection.setLocalDescription(local_desc);
+        socket.emit('peer:signaling:answer', local_desc);
+      });
+    }, onError);
+  });
+
+  // 3.シグナリングサーバからclient BのAnswer受信 (client A)
+  socket.on('peer:signaling:answer', function(remote_desc){
+    peerConnection.setRemoteDescription(new RTCSessionDescription(remote_desc), null, onError);
+  });
+
+  // 4.シグナリングサーバへ経路情報送信 (client A / client B)
+  peerConnection.onicecandidate = function(e){
+    socket.emit('peer:ice:candidate', e);
+  };
+
+  // 5.シグナリングサーバから経路情報受信 (client A / client B)
+  socket.on('peer:ice:candidate', function(candidate){
+    if(candidate.candidate) peerConnection.addIceCandidate(new RTCIceCandidate(candidate.candidate));
+  });
+
+  // 6.接続済みclientへメッセージ送信 (client A / client B)
+  submitButton.onclick = function(){
+    var message = chatText.value;
+    chatText.value = '';
+    sendChannel.send(message);
+  };
+
+  // 7.接続済みclientからメッセージ受信 (client A / client B)
+  sendChannel.onmessage = function(message){
+    onMessage(message.data);
+  };
+
+
+
+  /*
+   * 以下、表示するのに必要
+   *
+   */
+  // ボタン制御: 接続完了時
+  sendChannel.onopen = function(e){
+    submitButton.disabled = false;
+    connectButton.disabled = true;
+    chatText.focus();
+  };
+  // ボタン制御: 接続切断時
+  sendChannel.onclose = function(e){
+    submitButton.disabled = true;
+    connectButton.disabled = false;
+  };
+  // エラー表示用
+  function onError(){
+    console.error(arguments);
+  }
+  // メッセージ
+  function onMessage(text){
+    var message = document.createElement('li');
+    message.appendChild(document.createTextNode(text));
+    var log = document.getElementById('log');
+    log.insertBefore(message, log.firstChild);
+  }
+})();
+</script>
+</body>
+</html>

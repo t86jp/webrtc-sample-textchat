@@ -10,6 +10,8 @@ $ git clone https://github.com/t86jp/webrtc-sample-textchat.git
 
 $ cd webrtc-sample-textchat.git
 
+$ cd ./www/server && npm install && cd ../../
+
 $ docker build -t test/webrtc .
 ```
 
