@@ -62,7 +62,7 @@ window.RTCIceCandidate = window.mozRTCIceCandidate || window.RTCIceCandidate;
 
   // 4.シグナリングサーバへ経路情報送信 (client A / client B)
   peerConnection.onicecandidate = function(e){
-    socket.emit('peer:ice:candidate', e);
+    if(socket.connected) socket.emit('peer:ice:candidate', e);
   };
 
   // 5.シグナリングサーバから経路情報受信 (client A / client B)
@@ -82,6 +82,12 @@ window.RTCIceCandidate = window.mozRTCIceCandidate || window.RTCIceCandidate;
     onMessage(message.data);
   };
 
+  // P2P接続後はWebSocket不要
+  peerConnection.oniceconnectionstatechange = function(e){
+    if(e.target.iceConnectionState == 'connected'){
+      socket.close();
+    }
+  };
 
 
   /*
